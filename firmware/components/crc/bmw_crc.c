@@ -25,6 +25,16 @@ const uint8_t crc8_lut[] = {
     0xe3, 0xfe, 0xd9, 0xc4
 };
 
+/*
+def make_lut
+  256.times.map { |crc|
+    8.times.inject(crc) { |i,|
+      (i & 0x80 > 0 ? i << 1 ^ 0x1D : i << 1) & 0xFF
+    }
+  }
+end
+*/
+
 uint8_t
 crc8(uint8_t crc, uint8_t const *buf, uint32_t len)
 {

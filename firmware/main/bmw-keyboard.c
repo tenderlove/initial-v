@@ -17,16 +17,6 @@ typedef enum {
     RESET,
 } tx_task_action_t;
 
-/*
-def make_lut
-  256.times.map { |crc|
-    8.times.inject(crc) { |i,|
-      (i & 0x80 > 0 ? i << 1 ^ 0x1D : i << 1) & 0xFF
-    }
-  }
-end
-*/
-
 static void
 read_ack(void)
 {
