@@ -10,7 +10,7 @@ static SemaphoreHandle_t ctrl_task_sem;
 static QueueHandle_t tx_task_queue;
 
 #define TX_TASK_PRIO                    9
-#define CTRL_TASK_PRIO                  10
+#define RX_TASK_PRIO                  10
 
 typedef enum {
     NONE,
@@ -133,7 +133,7 @@ void app_main(void)
         return;
     }
 
-    xTaskCreatePinnedToCore(receive_task, "TWAI_rx", 4096, NULL, CTRL_TASK_PRIO, NULL, tskNO_AFFINITY);
+    xTaskCreatePinnedToCore(receive_task, "TWAI_rx", 4096, NULL, RX_TASK_PRIO, NULL, tskNO_AFFINITY);
     xTaskCreatePinnedToCore(transmit_task, "TWAI_tx", 4096, NULL, TX_TASK_PRIO, NULL, tskNO_AFFINITY);
     TimerHandle_t handle = xTimerCreate("Update Timer", pdMS_TO_TICKS(100), pdTRUE, (void *)0, timer_callback);
     xTimerStart(handle, 0);
