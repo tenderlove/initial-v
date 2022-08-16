@@ -3,39 +3,25 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "freertos/queue.h"
+#include "freertos/timers.h"
 #include <bmw_crc.h>
 
-int drive = 0;
 static SemaphoreHandle_t ctrl_task_sem;
 static QueueHandle_t tx_task_queue;
+uint8_t counter = 0;
 
 #define TX_TASK_PRIO                    9
 #define CTRL_TASK_PRIO                  10
 
 typedef enum {
+    NONE,
     BACKLIGHT,
+    DRIVE,
+    PARK,
     RESET,
 } tx_task_action_t;
 
-static void
-read_ack(void)
-{
-    printf("reading ack\n");
-    while(1) {
-        twai_message_t message;
-        if (twai_receive(&message, pdMS_TO_TICKS(10000)) == ESP_OK) {
-            //printf("Message received\n");
-        } else {
-            printf("Failed to receive message\n");
-            continue;
-        }
-        if (message.identifier < 0x700 && message.identifier >= 0x600) {
-            printf("great!\n");
-            printf("done reading ack\n");
-            return;
-        }
-    }
-}
+tx_task_action_t handle_state = NONE;
 
 static void
 send_light(uint8_t counter)
@@ -55,9 +41,7 @@ send_light(uint8_t counter)
     }
 
     //Queue message for transmission
-    if (twai_transmit(&message, pdMS_TO_TICKS(1000)) == ESP_OK) {
-        printf("Message queued for transmission\n");
-    } else {
+    if (twai_transmit(&message, pdMS_TO_TICKS(1000)) != ESP_OK) {
         printf("Failed to queue message for transmission\n");
     }
 
@@ -81,6 +65,48 @@ send_light(uint8_t counter)
     }
 
     return;
+}
+
+static void
+send_drive(void)
+{
+    twai_message_t message;
+    message.identifier = 0x3FD;
+    message.extd = 0;
+    message.data_length_code = 4;
+    message.data[1] = counter;
+    message.data[2] = 0x80;
+    message.data[3] = 0x00;
+    message.data[4] = 0x00;
+    message.data[0] = crc8(0, &message.data[1], 4);
+
+    if (twai_transmit(&message, pdMS_TO_TICKS(1000)) != ESP_OK) {
+        printf("Failed to queue message for transmission\n");
+    }
+    counter++;
+    if ((counter & 0xF) == 0xF)
+        counter++;
+}
+
+static void
+send_park(void)
+{
+    twai_message_t message;
+    message.identifier = 0x3FD;
+    message.extd = 0;
+    message.data_length_code = 4;
+    message.data[1] = counter;
+    message.data[2] = 0x20;
+    message.data[3] = 0x00;
+    message.data[4] = 0x00;
+    message.data[0] = crc8(0, &message.data[1], 4);
+
+    if (twai_transmit(&message, pdMS_TO_TICKS(1000)) != ESP_OK) {
+        printf("Failed to queue message for transmission\n");
+    }
+    counter++;
+    if ((counter & 0xF) == 0xF)
+        counter++;
 }
 
 static void
@@ -125,23 +151,12 @@ send_reset(void)
 void
 ctrl_task(void *arg)
 {
-    xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
-
     tx_task_action_t tx_action;
 
-    //Start TWAI driver
-    if (twai_start() == ESP_OK) {
-        printf("Driver started\n");
-    } else {
-        printf("Failed to start driver\n");
-        return;
-    }
+    xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
 
-    uint8_t counter = 0;
-
-    send_light(0);
-    counter++;
-    //send_reset();
+    tx_action = BACKLIGHT;
+    xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
 
     while(1) {
         //Wait for message to be received
@@ -160,17 +175,12 @@ ctrl_task(void *arg)
             printf("  %#04x", message.data[i]);
         }
         if (message.data_length_code == 4 && message.data[2] == 0x3e) {
-            drive = 1;
-            tx_action = BACKLIGHT;
-            xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
+            handle_state = DRIVE;
         }
         if (message.data_length_code == 4 && message.data[3] == 0xd5) {
-            drive = 0;
-            tx_action = RESET;
-            xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
+            handle_state = PARK;
         }
         printf("\n");
-
     }
 }
 
@@ -181,21 +191,47 @@ transmit_task(void *arg)
         tx_task_action_t action;
         xQueueReceive(tx_task_queue, &action, portMAX_DELAY);
 
-        if (action == BACKLIGHT) {
-            send_light(0);
-            /*
-            if (drive) {
-                counter++;
-                if ((counter & 0xF) == 0xF)
-                    counter++;
-                drive = 0;
-            }
-            */
+        switch(action) {
+            case BACKLIGHT:
+                send_light(0);
+                break;
+            case RESET:
+                send_reset();
+                break;
+            case DRIVE:
+                send_drive();
+                break;
+            case PARK:
+                send_park();
+                break;
+            default:
+                break;
         }
+    }
+}
 
-        if (action == RESET) {
+static void
+timer_callback(TimerHandle_t pxTimer)
+{
+    tx_task_action_t tx_action;
+
+    switch(handle_state) {
+        case BACKLIGHT:
+            send_light(0);
+            break;
+        case RESET:
             send_reset();
-        }
+            break;
+        case DRIVE:
+            tx_action = DRIVE;
+            xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
+            break;
+        case PARK:
+            tx_action = PARK;
+            xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
+            break;
+        default:
+            break;
     }
 }
 
@@ -219,8 +255,18 @@ void app_main(void)
         return;
     }
 
+    //Start TWAI driver
+    if (twai_start() == ESP_OK) {
+        printf("Driver started\n");
+    } else {
+        printf("Failed to start driver\n");
+        return;
+    }
+
     xTaskCreatePinnedToCore(ctrl_task, "TWAI_ctrl", 4096, NULL, CTRL_TASK_PRIO, NULL, tskNO_AFFINITY);
     xTaskCreatePinnedToCore(transmit_task, "TWAI_tx", 4096, NULL, TX_TASK_PRIO, NULL, tskNO_AFFINITY);
+    TimerHandle_t handle = xTimerCreate("Update Timer", pdMS_TO_TICKS(100), pdTRUE, (void *)0, timer_callback);
+    xTimerStart(handle, 0);
     xSemaphoreGive(ctrl_task_sem);
     vTaskDelay(pdMS_TO_TICKS(100));
     xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);   //Wait for completion
