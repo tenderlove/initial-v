@@ -8,7 +8,9 @@
 
 static SemaphoreHandle_t ctrl_task_sem;
 static QueueHandle_t tx_task_queue;
+static QueueHandle_t buttons_queue;
 
+#define KB_TASK_PRIO                    8
 #define TX_TASK_PRIO                    9
 #define RX_TASK_PRIO                  10
 
@@ -21,6 +23,7 @@ typedef enum {
 } tx_task_action_t;
 
 tx_task_action_t handle_state = NONE;
+tx_task_action_t handle_mode = NONE;
 
 void
 dump_message(twai_message_t message)
@@ -40,6 +43,8 @@ receive_task(void *arg)
 
     xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
 
+    bool pressed;
+
     tx_action = BACKLIGHT;
     xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
 
@@ -56,17 +61,46 @@ receive_task(void *arg)
             if (!SHIFTER_CENTER_P(message)) {
                 dump_message(message);
             }
+
+            if (SHIFTER_CENTER_P(message)) {
+                if (handle_state != NONE) {
+                    pressed = false;
+                    xQueueSend(buttons_queue, &pressed, portMAX_DELAY);
+                }
+                handle_state = NONE;
+            }
+
             if (SHIFTER_BACK_P(message)) {
+                if (handle_state != DRIVE) {
+                    pressed = true;
+                    xQueueSend(buttons_queue, &pressed, portMAX_DELAY);
+                }
                 handle_state = DRIVE;
+                handle_mode = handle_state;
             }
 
             if (SHIFTER_PARK_P(message)) {
+                if (handle_state != PARK) {
+                    pressed = true;
+                    xQueueSend(buttons_queue, &pressed, portMAX_DELAY);
+                }
                 handle_state = PARK;
+                handle_mode = handle_state;
             }
         }
         else {
             dump_message(message);
         }
+    }
+}
+
+void
+kb_transmit_task(void *arg)
+{
+    while (1) {
+        bool pressed;
+        xQueueReceive(buttons_queue, &pressed, portMAX_DELAY);
+        printf("pressed! %d\n", pressed);
     }
 }
 
@@ -101,7 +135,7 @@ timer_callback(TimerHandle_t pxTimer)
 {
     tx_task_action_t tx_action;
 
-    tx_action = handle_state;
+    tx_action = handle_mode;
     xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
 }
 
@@ -109,6 +143,7 @@ void app_main(void)
 {
     ctrl_task_sem = xSemaphoreCreateBinary();
     tx_task_queue = xQueueCreate(1, sizeof(tx_task_action_t));
+    buttons_queue = xQueueCreate(1, sizeof(uint32_t));
 
     //Initialize configuration structures using macro initializers
     twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
@@ -135,6 +170,7 @@ void app_main(void)
 
     xTaskCreatePinnedToCore(receive_task, "TWAI_rx", 4096, NULL, RX_TASK_PRIO, NULL, tskNO_AFFINITY);
     xTaskCreatePinnedToCore(transmit_task, "TWAI_tx", 4096, NULL, TX_TASK_PRIO, NULL, tskNO_AFFINITY);
+    xTaskCreatePinnedToCore(kb_transmit_task, "kb_tx", 4096, NULL, KB_TASK_PRIO, NULL, tskNO_AFFINITY);
     TimerHandle_t handle = xTimerCreate("Update Timer", pdMS_TO_TICKS(100), pdTRUE, (void *)0, timer_callback);
     xTimerStart(handle, 0);
     xSemaphoreGive(ctrl_task_sem);
