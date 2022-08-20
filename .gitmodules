@@ -1,0 +1,3 @@
+[submodule "firmware/components/esp-nimble-cpp"]
+	path = firmware/components/esp-nimble-cpp
+	url = git@github.com:tenderlove/esp-nimble-cpp.git
