@@ -139,7 +139,7 @@ timer_callback(TimerHandle_t pxTimer)
     xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
 }
 
-void app_main(void)
+extern "C" void app_main(void)
 {
     ctrl_task_sem = xSemaphoreCreateBinary();
     tx_task_queue = xQueueCreate(1, sizeof(tx_task_action_t));

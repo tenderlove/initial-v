@@ -5,6 +5,10 @@
 #include <driver/twai.h>
 #include <bmw_crc.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static inline bool
 SHIFTER_BACK_P(twai_message_t message)
 {
@@ -28,5 +32,9 @@ void shifter_send_park(void);
 void shifter_send_drive(bool moveable);
 void shifter_send_reset(void);
 void shifter_send_light(uint8_t counter);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
