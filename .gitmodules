@@ -1,3 +1,6 @@
 [submodule "firmware/components/esp-nimble-cpp"]
 	path = firmware/components/esp-nimble-cpp
 	url = git@github.com:tenderlove/esp-nimble-cpp.git
+[submodule "firmware/components/esp-nimble-keyboard"]
+	path = firmware/components/esp-nimble-keyboard
+	url = git@github.com:tenderlove/ESP32-NimBLE-Keyboard.git
