@@ -15,6 +15,19 @@ static inline bool SHIFTER_##name##_P(twai_message_t message) \
     return message.identifier == 0x197 && message.data[2] == byte; \
 }
 
+#define PARK_BUTTON_BIT (1 << 4)
+#define SHIFTER_POSITION_MASK (PARK_BUTTON_BIT - 1)
+typedef enum {
+    SHIFTER_CENTER,
+    SHIFTER_UP,
+    SHIFTER_UP_UP,
+    SHIFTER_DOWN,
+    SHIFTER_DOWN_DOWN,
+    SHIFTER_SIDE_UP,
+    SHIFTER_SIDE_DOWN,
+    SHIFTER_SIDE,
+} handle_position_t;
+
 POSITION_PREDICATE(CENTER, 0x0e);
 POSITION_PREDICATE(UP, 0x1e);
 POSITION_PREDICATE(UP_UP, 0x2e);
@@ -29,6 +42,25 @@ SHIFTER_PARK_P(twai_message_t message)
 {
     return message.identifier == 0x197 && message.data[3] == 0xd5;
 }
+
+static inline bool
+SHIFTER_POSITION(twai_message_t message, handle_position_t * pos)
+{
+    if (message.identifier != 0x197) {
+        return false;
+    }
+
+    uint8_t position = (message.data[2] >> 4) & 0xF;
+
+    if (SHIFTER_PARK_P(message)) {
+        position |= PARK_BUTTON_BIT;
+    }
+
+    *pos = (handle_position_t)position;
+
+    return true;
+}
+
 
 void shifter_send_park(void);
 void shifter_send_drive(bool moveable);

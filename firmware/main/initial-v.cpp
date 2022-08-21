@@ -5,10 +5,12 @@
 #include "freertos/queue.h"
 #include "freertos/timers.h"
 #include <shifter.h>
+#include <BleKeyboard.h>
 
 static SemaphoreHandle_t ctrl_task_sem;
 static QueueHandle_t tx_task_queue;
 static QueueHandle_t buttons_queue;
+static BleKeyboard * kb;
 
 #define KB_TASK_PRIO                    8
 #define TX_TASK_PRIO                    9
@@ -18,12 +20,25 @@ typedef enum {
     NONE,
     BACKLIGHT,
     DRIVE,
-    PARK,
     RESET,
-} tx_task_action_t;
+} handle_state_t;
 
-tx_task_action_t handle_state = NONE;
-tx_task_action_t handle_mode = NONE;
+#define PRESSED (1 << 7)
+#define BUTTON_MASK (PRESSED - 1)
+
+uint8_t key_lut[] = {
+    'r', // CENTER
+    'u', // UP
+    'U', // UP_UP
+    'd', // DOWN
+    'D', // DOWN_DOWN
+    'x', // SIDE_UP
+    'y', // SIDE_DOWN
+    'l', // SIDE
+};
+
+handle_state_t handle_mode = NONE;
+handle_position_t current_pos = SHIFTER_CENTER;
 
 void
 dump_message(twai_message_t message)
@@ -39,11 +54,9 @@ dump_message(twai_message_t message)
 void
 receive_task(void *arg)
 {
-    tx_task_action_t tx_action;
+    handle_state_t tx_action;
 
     xSemaphoreTake(ctrl_task_sem, portMAX_DELAY);
-
-    bool pressed;
 
     tx_action = BACKLIGHT;
     xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
@@ -57,36 +70,44 @@ receive_task(void *arg)
         }
 
         //Process received message
-        if (message.identifier == 0x197) {
-            if (!SHIFTER_CENTER_P(message)) {
-                dump_message(message);
+        handle_position_t pos;
+        if (SHIFTER_POSITION(message, &pos)) {
+            if (current_pos != pos) {
+                uint8_t button = pos;
+                handle_position_t to_pos = (handle_position_t)((uint8_t)pos & SHIFTER_POSITION_MASK);
+                handle_position_t from_pos = (handle_position_t)((uint8_t)current_pos & SHIFTER_POSITION_MASK);
+
+                // Center -> side
+                if (to_pos == SHIFTER_SIDE && from_pos == SHIFTER_CENTER) {
+                    uint8_t press = button | PRESSED;
+                    xQueueSend(buttons_queue, &press, portMAX_DELAY);
+                    vTaskDelay(pdMS_TO_TICKS(3));
+                    xQueueSend(buttons_queue, &button, portMAX_DELAY);
+                }
+                else {
+                    // Side -> center
+                    if (to_pos == SHIFTER_CENTER && from_pos == SHIFTER_SIDE) {
+                        uint8_t press = button | PRESSED;
+                        xQueueSend(buttons_queue, &press, portMAX_DELAY);
+                        vTaskDelay(pdMS_TO_TICKS(3));
+                        xQueueSend(buttons_queue, &button, portMAX_DELAY);
+                    }
+                    else {
+                        // Center -> something else == button press
+                        if (from_pos == SHIFTER_CENTER) {
+                            button |= PRESSED;
+                        }
+
+                        // something else -> center == release previous button
+                        if (to_pos == SHIFTER_CENTER) {
+                            button = current_pos;
+                        }
+                        xQueueSend(buttons_queue, &button, portMAX_DELAY);
+                    }
+                }
             }
 
-            if (SHIFTER_CENTER_P(message)) {
-                if (handle_state != NONE) {
-                    pressed = false;
-                    xQueueSend(buttons_queue, &pressed, portMAX_DELAY);
-                }
-                handle_state = NONE;
-            }
-
-            if (SHIFTER_BACK_P(message)) {
-                if (handle_state != DRIVE) {
-                    pressed = true;
-                    xQueueSend(buttons_queue, &pressed, portMAX_DELAY);
-                }
-                handle_state = DRIVE;
-                handle_mode = handle_state;
-            }
-
-            if (SHIFTER_PARK_P(message)) {
-                if (handle_state != PARK) {
-                    pressed = true;
-                    xQueueSend(buttons_queue, &pressed, portMAX_DELAY);
-                }
-                handle_state = PARK;
-                handle_mode = handle_state;
-            }
+            current_pos = pos;
         }
         else {
             dump_message(message);
@@ -98,9 +119,25 @@ void
 kb_transmit_task(void *arg)
 {
     while (1) {
-        bool pressed;
+        uint8_t pressed;
+        uint8_t button;
         xQueueReceive(buttons_queue, &pressed, portMAX_DELAY);
-        printf("pressed! %d\n", pressed);
+
+        button = pressed & BUTTON_MASK;
+
+        uint8_t key = key_lut[button];
+
+        if (kb->isConnected()) {
+            if (pressed & PRESSED) {
+                printf("pressed! ");
+                kb->press(key);
+            }
+            else {
+                printf("released! ");
+                kb->release(key);
+            }
+            printf("%d key: %d\n", button, key);
+        }
     }
 }
 
@@ -108,7 +145,7 @@ void
 transmit_task(void *arg)
 {
     while (1) {
-        tx_task_action_t action;
+        handle_state_t action;
         xQueueReceive(tx_task_queue, &action, portMAX_DELAY);
 
         switch(action) {
@@ -121,10 +158,7 @@ transmit_task(void *arg)
             case DRIVE:
                 shifter_send_drive(true);
                 break;
-            case PARK:
-                shifter_send_park();
-                break;
-            default:
+            case NONE:
                 break;
         }
     }
@@ -133,7 +167,7 @@ transmit_task(void *arg)
 static void
 timer_callback(TimerHandle_t pxTimer)
 {
-    tx_task_action_t tx_action;
+    handle_state_t tx_action;
 
     tx_action = handle_mode;
     xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
@@ -142,7 +176,7 @@ timer_callback(TimerHandle_t pxTimer)
 extern "C" void app_main(void)
 {
     ctrl_task_sem = xSemaphoreCreateBinary();
-    tx_task_queue = xQueueCreate(1, sizeof(tx_task_action_t));
+    tx_task_queue = xQueueCreate(1, sizeof(uint32_t));
     buttons_queue = xQueueCreate(1, sizeof(uint32_t));
 
     //Initialize configuration structures using macro initializers
@@ -167,6 +201,11 @@ extern "C" void app_main(void)
         printf("Failed to start driver\n");
         return;
     }
+
+    handle_mode = DRIVE;
+
+    kb = new BleKeyboard("Initial V", "Adequate INC", 100);
+    kb->begin();
 
     xTaskCreatePinnedToCore(receive_task, "TWAI_rx", 4096, NULL, RX_TASK_PRIO, NULL, tskNO_AFFINITY);
     xTaskCreatePinnedToCore(transmit_task, "TWAI_tx", 4096, NULL, TX_TASK_PRIO, NULL, tskNO_AFFINITY);
