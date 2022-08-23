@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name "MPM3610GQV-Z")(type "KiCad")(uri "${KIPRJMOD}/libraries/MPM3610GQV-Z.kicad_sym")(options "")(descr ""))
+  (lib (name "esp32-mini-1")(type "KiCad")(uri "${KIPRJMOD}/libraries/esp32-mini-1.kicad_sym")(options "")(descr ""))
+)
