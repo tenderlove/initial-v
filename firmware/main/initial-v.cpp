@@ -180,7 +180,7 @@ extern "C" void app_main(void)
     buttons_queue = xQueueCreate(1, sizeof(uint32_t));
 
     //Initialize configuration structures using macro initializers
-    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
+    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_22, GPIO_NUM_19, TWAI_MODE_NORMAL);
     g_config.alerts_enabled |= TWAI_ALERT_TX_SUCCESS | TWAI_ALERT_TX_FAILED;
 
     twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
