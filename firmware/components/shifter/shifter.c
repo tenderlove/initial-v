@@ -30,6 +30,18 @@ shifter_send_park(void)
 }
 
 void
+shifter_send_neutral(void)
+{
+    send_state(0x60);
+}
+
+void
+shifter_send_reverse(void)
+{
+    send_state(0x40);
+}
+
+void
 shifter_send_drive(bool moveable)
 {
     if (moveable) {
@@ -61,10 +73,11 @@ shifter_send_reset(void)
 }
 
 void
-shifter_send_light(uint8_t counter)
+shifter_send_light(uint8_t counter, uint8_t brightness)
 {
-    uint8_t buf[] = { 0, 0xFF, 0x00, 0x00 };
-    buf[0] = counter;
+    uint8_t buf[] = { 0, 0x00, 0x00, 0x00 };
+    buf[0] = brightness;
+    //buf[1] = brightness;
 
     twai_message_t message;
     message.identifier = 0x202;

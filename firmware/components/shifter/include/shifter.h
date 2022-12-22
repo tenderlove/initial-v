@@ -26,6 +26,7 @@ typedef enum {
     SHIFTER_SIDE_UP,
     SHIFTER_SIDE_DOWN,
     SHIFTER_SIDE,
+    SHIFTER_MAX,
 } handle_position_t;
 
 POSITION_PREDICATE(CENTER, 0x0e);
@@ -52,6 +53,11 @@ SHIFTER_POSITION(twai_message_t message, handle_position_t * pos)
 
     uint8_t position = (message.data[2] >> 4) & 0xF;
 
+    // Resetting causes the position to go to 9
+    if (position > SHIFTER_MAX) {
+      position = SHIFTER_CENTER;
+    }
+
     if (SHIFTER_PARK_P(message)) {
         position |= PARK_BUTTON_BIT;
     }
@@ -63,9 +69,11 @@ SHIFTER_POSITION(twai_message_t message, handle_position_t * pos)
 
 
 void shifter_send_park(void);
+void shifter_send_neutral(void);
+void shifter_send_reverse(void);
 void shifter_send_drive(bool moveable);
 void shifter_send_reset(void);
-void shifter_send_light(uint8_t counter);
+void shifter_send_light(uint8_t counter, uint8_t brightness);
 
 #ifdef __cplusplus
 }

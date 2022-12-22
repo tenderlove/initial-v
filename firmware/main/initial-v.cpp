@@ -6,6 +6,7 @@
 #include "freertos/timers.h"
 #include <shifter.h>
 #include <BleKeyboard.h>
+#include "NimBLECharacteristic.h"
 
 static SemaphoreHandle_t ctrl_task_sem;
 static QueueHandle_t tx_task_queue;
@@ -19,26 +20,62 @@ static BleKeyboard * kb;
 typedef enum {
     NONE,
     BACKLIGHT,
-    DRIVE,
     RESET,
+    DRIVE,
+    NEUTRAL,
+    REVERSE,
+    PARK,
 } handle_state_t;
 
 #define PRESSED (1 << 7)
 #define BUTTON_MASK (PRESSED - 1)
 
-uint8_t key_lut[] = {
-    'r', // CENTER
-    'u', // UP
-    'U', // UP_UP
-    'd', // DOWN
-    'D', // DOWN_DOWN
-    'x', // SIDE_UP
-    'y', // SIDE_DOWN
-    'l', // SIDE
-};
-
 handle_state_t handle_mode = NONE;
 handle_position_t current_pos = SHIFTER_CENTER;
+uint8_t brightness = 0xFF;
+
+class HIDDataCallbacks : public NimBLECharacteristicCallbacks
+{
+    public:
+        HIDDataCallbacks(void) { }
+
+        void onWrite(NimBLECharacteristic* me) {
+            size_t len = me->getDataLength();
+            const uint8_t *buff = me->getValue()->data();
+            handle_state_t tx_action;
+
+            handle_state_t requested_state = (handle_state_t)buff[0];
+
+            switch (requested_state) {
+                case NONE:
+                case RESET:
+                    tx_action = RESET;
+                    xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
+                    break;
+                case BACKLIGHT:
+                    if (len > 1) {
+                        brightness = buff[1];
+                    } else {
+                        brightness = 0xFF;
+                    }
+                    tx_action = BACKLIGHT;
+                    xQueueSend(tx_task_queue, &tx_action, portMAX_DELAY);
+                    break;
+                case DRIVE:
+                case NEUTRAL:
+                case REVERSE:
+                case PARK:
+                    handle_mode = requested_state;
+                    break;
+            }
+
+            printf("onwrite!!\n");
+            for (int i = 0; i < len; i++) {
+                printf("onWrite byte: %d\n", buff[i]);
+            }
+            printf("done!!\n");
+        }
+};
 
 void
 dump_message(twai_message_t message)
@@ -73,47 +110,67 @@ receive_task(void *arg)
         handle_position_t pos;
         if (SHIFTER_POSITION(message, &pos)) {
             if (current_pos != pos) {
-                uint8_t button = pos;
                 handle_position_t to_pos = (handle_position_t)((uint8_t)pos & SHIFTER_POSITION_MASK);
                 handle_position_t from_pos = (handle_position_t)((uint8_t)current_pos & SHIFTER_POSITION_MASK);
 
-                // Center -> side
-                if (to_pos == SHIFTER_SIDE && from_pos == SHIFTER_CENTER) {
-                    uint8_t press = button | PRESSED;
-                    xQueueSend(buttons_queue, &press, portMAX_DELAY);
-                    vTaskDelay(pdMS_TO_TICKS(3));
-                    xQueueSend(buttons_queue, &button, portMAX_DELAY);
-                }
-                else {
-                    // Side -> center
-                    if (to_pos == SHIFTER_CENTER && from_pos == SHIFTER_SIDE) {
+                if (to_pos != from_pos) {
+                    uint8_t button = to_pos;
+                    printf("from pos (%d) %d -> to pos %d\n", pos, from_pos, to_pos);
+
+                    // Center -> side
+                    if (to_pos == SHIFTER_SIDE && from_pos == SHIFTER_CENTER) {
                         uint8_t press = button | PRESSED;
                         xQueueSend(buttons_queue, &press, portMAX_DELAY);
                         vTaskDelay(pdMS_TO_TICKS(3));
                         xQueueSend(buttons_queue, &button, portMAX_DELAY);
                     }
                     else {
-                        // Center -> something else == button press
-                        if (from_pos == SHIFTER_CENTER) {
-                            button |= PRESSED;
+                        // Side -> center
+                        if (to_pos == SHIFTER_CENTER && from_pos == SHIFTER_SIDE) {
+                            uint8_t press = button | PRESSED;
+                            xQueueSend(buttons_queue, &press, portMAX_DELAY);
+                            vTaskDelay(pdMS_TO_TICKS(3));
+                            xQueueSend(buttons_queue, &button, portMAX_DELAY);
                         }
+                        else {
+                            // Center -> something else == button press
+                            if (from_pos == SHIFTER_CENTER) {
+                                button |= PRESSED;
+                            }
 
-                        // something else -> center == release previous button
-                        if (to_pos == SHIFTER_CENTER) {
-                            button = current_pos;
+                            // something else -> center == release previous button
+                            if (to_pos == SHIFTER_CENTER) {
+                                button = current_pos;
+                            }
+                            xQueueSend(buttons_queue, &button, portMAX_DELAY);
                         }
-                        xQueueSend(buttons_queue, &button, portMAX_DELAY);
+                    }
+                }
+                else {
+                    if (pos & PARK_BUTTON_BIT) {
+                        printf("park button pressed\n");
+                    }
+                    else {
+                        printf("park button released\n");
                     }
                 }
             }
 
             current_pos = pos;
         }
-        else {
-            dump_message(message);
-        }
     }
 }
+
+uint8_t key_lut[] = {
+    'r', // CENTER
+    'u', // UP
+    'U', // UP_UP
+    'd', // DOWN
+    'D', // DOWN_DOWN
+    'x', // SIDE_UP
+    'y', // SIDE_DOWN
+    'l', // SIDE
+};
 
 void
 kb_transmit_task(void *arg)
@@ -128,15 +185,20 @@ kb_transmit_task(void *arg)
         uint8_t key = key_lut[button];
 
         if (kb->isConnected()) {
+            switch (key) {
+                case SHIFTER_CENTER:
+                case SHIFTER_SIDE:
+                    break;
+            }
             if (pressed & PRESSED) {
                 printf("pressed! ");
-                kb->press(key);
+                //kb->press(key);
             }
             else {
                 printf("released! ");
-                kb->release(key);
+                //kb->release(key);
             }
-            printf("%d key: %d\n", button, key);
+            printf("%d key: %c\n", button, (char)key);
         }
     }
 }
@@ -148,15 +210,27 @@ transmit_task(void *arg)
         handle_state_t action;
         xQueueReceive(tx_task_queue, &action, portMAX_DELAY);
 
+        printf("transmitting %d\n", action);
+
         switch(action) {
             case BACKLIGHT:
-                shifter_send_light(0);
+                printf("transmitting %d brightness %d\n", action, brightness);
+                shifter_send_light(0, brightness);
                 break;
             case RESET:
                 shifter_send_reset();
                 break;
             case DRIVE:
                 shifter_send_drive(true);
+                break;
+            case NEUTRAL:
+                shifter_send_neutral();
+                break;
+            case REVERSE:
+                shifter_send_reverse();
+                break;
+            case PARK:
+                shifter_send_park();
                 break;
             case NONE:
                 break;
@@ -184,7 +258,11 @@ extern "C" void app_main(void)
     g_config.alerts_enabled |= TWAI_ALERT_TX_SUCCESS | TWAI_ALERT_TX_FAILED;
 
     twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
-    twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+    //twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+    // We only care about 0x197 messages
+    twai_filter_config_t f_config = { .acceptance_code = ((uint32_t)0x197 << 21),
+                                      .acceptance_mask = ~(TWAI_STD_ID_MASK << 21),
+                                      .single_filter   = true };
 
     //Install TWAI driver
     if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK) {
@@ -204,13 +282,13 @@ extern "C" void app_main(void)
 
     handle_mode = DRIVE;
 
-    kb = new BleKeyboard("Initial V", "Adequate INC", 100);
+    kb = new BleKeyboard("Initial V", "Adequate INC", 100, new HIDDataCallbacks());
     kb->begin();
 
     xTaskCreatePinnedToCore(receive_task, "TWAI_rx", 4096, NULL, RX_TASK_PRIO, NULL, tskNO_AFFINITY);
     xTaskCreatePinnedToCore(transmit_task, "TWAI_tx", 4096, NULL, TX_TASK_PRIO, NULL, tskNO_AFFINITY);
     xTaskCreatePinnedToCore(kb_transmit_task, "kb_tx", 4096, NULL, KB_TASK_PRIO, NULL, tskNO_AFFINITY);
-    TimerHandle_t handle = xTimerCreate("Update Timer", pdMS_TO_TICKS(100), pdTRUE, (void *)0, timer_callback);
+    TimerHandle_t handle = xTimerCreate("Update Timer", pdMS_TO_TICKS(250), pdTRUE, (void *)0, timer_callback);
     xTimerStart(handle, 0);
     xSemaphoreGive(ctrl_task_sem);
     vTaskDelay(pdMS_TO_TICKS(100));
