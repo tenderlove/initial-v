@@ -12,10 +12,11 @@ module ShifterThing() {
     linear_extrude(4)
     rotate([0, 0, -16])
     rotate([0, 180, 0])
-    import("path413.svg", center=true, dpi=94.5);
+    //import("path413.svg", center=true, dpi=94.5);
+    import("handle.svg", center=true, dpi=24.6);
 }
 
-module Foo(width) {
+module TopPlate(width) {
   difference() {
     color("blue")
     linear_extrude(2)
@@ -105,19 +106,62 @@ module RearWall(height) {
 }
 
 module TopPart() {
-  translate([0, (TOP_PLATE_Y / 2) - (15 / 2), 0])
-    FrontPosts(REAR_POST_Z + 2); // front are ~2mm lower
+  translate([0, TOP_PLATE_Y / 2, 0]) {
+    translate([0, (TOP_PLATE_Y / 2) - (15 / 2), 0])
+      FrontPosts(REAR_POST_Z + 2); // front are ~2mm lower
 
-  translate([0, 0, 2]) {
-    translate([0, -((TOP_PLATE_Y / 2) + 9), 0])
-      rotate([0, 0, 180])
-      RearWall(REAR_POST_Z);
-    translate([0, 0, REAR_POST_Z - 2])
-      Foo(79);
+    translate([0, 0, 2]) {
+      translate([0, -((TOP_PLATE_Y / 2) + 9), 0])
+        rotate([0, 0, 180])
+        RearWall(REAR_POST_Z);
+      translate([0, 0, REAR_POST_Z - 2])
+        TopPlate(BOX_X);
+    }
+  }
+
+  difference() {
+    TopOuterBox(REAR_POST_Z + MIN_WALL_THICKNESS);
+    FrontHole();
+    LeftWallSlot();
   }
 }
 
-module BottomPart() {
+module FrontHole() {
+  width = 31;
+  height = 21;
+  center = 22 / 2;
+  depth = 5;
+
+  translate([-center, TOP_PLATE_Y - (depth / 2) , 3])
+    linear_extrude(height)
+    square([width, MIN_WALL_THICKNESS + depth]);
+}
+
+module LeftWallSlot() {
+  translate([-((BOX_X / 2) + 1.5), 4.5, -1])
+    linear_extrude(8)
+    square([2, 22]);
+}
+
+module TopOuterBox(box_z) {
+  x_axis_wall = MIN_WALL_THICKNESS + 1;
+  y_axis_wall = MIN_WALL_THICKNESS + 1;
+  box_with_wall_y = BOX_Y + x_axis_wall;
+  box_with_wall_x = BOX_X + (2 * y_axis_wall);
+  post_overlap = 4;
+
+  difference() {
+    translate([-(box_with_wall_x / 2), -post_overlap, 0])
+      linear_extrude(box_z)
+      square([box_with_wall_x, box_with_wall_y + post_overlap]);
+
+    translate([-(BOX_X / 2), -(1 + post_overlap), -1])
+      linear_extrude(MIN_WALL_THICKNESS + box_z + 2)
+      square([BOX_X, BOX_Y + 1 + post_overlap]);
+  }
+}
+
+module BottomTray() {
   x_axis_wall = MIN_WALL_THICKNESS + 1;
   y_axis_wall = MIN_WALL_THICKNESS;
   box_with_wall_y = BOX_Y + x_axis_wall;
@@ -126,23 +170,71 @@ module BottomPart() {
 
   box_z = 8;
 
-  difference() {
-    translate([-(box_with_wall_x / 2), -post_overlap, 0])
-      linear_extrude(MIN_WALL_THICKNESS + box_z)
-      square([box_with_wall_x, box_with_wall_y + post_overlap]);
+  height = 13;
 
-    translate([-(BOX_X / 2), -(1 + post_overlap), MIN_WALL_THICKNESS])
-      linear_extrude(MIN_WALL_THICKNESS + box_z)
-      square([BOX_X, BOX_Y + 1 + post_overlap]);
+  translate([0, -(box_with_wall_y / 2), 0]) {
+    difference() {
+      translate([-(box_with_wall_x / 2), -post_overlap, 0])
+        linear_extrude(MIN_WALL_THICKNESS + box_z)
+        square([box_with_wall_x, box_with_wall_y + post_overlap]);
 
-  translate([-(BOX_X / 2), BOX_Y - 0.5, MIN_WALL_THICKNESS])
-    linear_extrude(box_z + 1)
-      square([16.5, 2]);
+      translate([-(BOX_X / 2), -(1 + post_overlap), MIN_WALL_THICKNESS])
+        linear_extrude(MIN_WALL_THICKNESS + box_z)
+        square([BOX_X, BOX_Y + 1 + post_overlap]);
+
+      translate([-(BOX_X / 2), BOX_Y - 0.5, MIN_WALL_THICKNESS])
+        linear_extrude(box_z + 1)
+        square([16.5, 2]);
+    }
+
+    translate([0, -(REAR_TAB_LENGTH - (POST_OUTER_DIAMETER / 2)), height])
+      rotate([180, 0, 0])
+      RearWall(height);
+
+    translate([0, TOP_PLATE_Y / 2, 0]) {
+      translate([0, (TOP_PLATE_Y / 2) - (15 / 2), 0])
+        FrontPosts(height);
+    }
   }
 
-  translate([0, -(REAR_TAB_LENGTH - (POST_OUTER_DIAMETER / 2)), 15])
-    rotate([180, 0, 0])
-    RearWall(15);
+  top_shift = (POST_OUTER_DIAMETER / 2) + (REAR_TAB_LENGTH - POST_OUTER_DIAMETER);
+  translate([0, (box_with_wall_y / 2) + top_shift, 0])
+    rotate([0, 0, 180])
+    SuctionMount();
+
+  translate([0, -((box_with_wall_y / 2) + (top_shift * 2)), 0])
+    SuctionMount();
+
+  translate([(box_with_wall_x / 2) + top_shift, 10, 0])
+    rotate([0, 0, 90])
+    SuctionMount();
+
+  translate([-((box_with_wall_x / 2) + top_shift), 10, 0])
+    rotate([0, 0, -90])
+    SuctionMount();
 }
 
+module SuctionMount() {
+  difference() {
+    post_outer_radius = POST_OUTER_DIAMETER / 2;
+    nut_depth = 4;
+    tab_height = nut_depth + MIN_WALL_THICKNESS;
+    tab_length = REAR_TAB_LENGTH;
+    union() {
+      cylinder(tab_height, d=POST_OUTER_DIAMETER, $fn=80);
+      translate([-post_outer_radius, 0, 0])
+        cube([POST_OUTER_DIAMETER, post_outer_radius + (tab_length - POST_OUTER_DIAMETER), tab_height]);
+    }
+    translate([0, 0, tab_height - nut_depth])
+      cylinder(nut_depth + 0.5, d=9.3, $fn=6);
+    translate([0, 0, -0.5])
+      cylinder(tab_height + 2, d=5.3, $fn=80);
+  }
+}
+
+module BottomPart() {
+  BottomTray();
+}
+
+//TopPart();
 BottomPart();

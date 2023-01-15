@@ -1,0 +1,41 @@
+EESchema-LIBRARY Version 2.3
+#encoding utf-8
+#(c) SnapEDA 2016 (snapeda.com)
+#This work is licensed under a Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA) with Design Exception 1.0
+#
+# PJ-032A
+#
+DEF PJ-032A J 0 40 Y N 1 L N
+F0 "J" -300 200 50 H V L BNN
+F1 "PJ-032A" -301 -200 50 H V L BNN
+F2 "CUI_PJ-032A" 0 0 50 H I L BNN
+F3 "" 0 0 50 H I L BNN
+F4 "CUI Inc." 0 0 50 H I L BNN "MF"
+F5 "2.0 x 6.5 mm, 2.5 A, Vertical, Through Hole, Dc Power Jack Connector" 0 0 50 H I L BNN "DESCRIPTION"
+F6 "PJ-032A" 0 0 50 H I L BNN "MP"
+F7 "https://www.cui.com/product/interconnect/connectors/dc-power-connectors/jacks/pj-032a?utm_source=snapeda.com&utm_medium=referral&utm_campaign=snapedaBOM" 0 0 50 H I L BNN "CUI_PURCHASE_URL"
+F8 "None" 0 0 50 H I L BNN "PACKAGE"
+F9 "https://www.digikey.in/product-detail/en/cui-inc/PJ-032A/CP-032A-ND/1644525?utm_source=snapeda&utm_medium=aggregator&utm_campaign=symbol" 0 0 50 H I L BNN "DIGI-KEY_PURCHASE_URL"
+F10 "CP-032A-ND" 0 0 50 H I L BNN "DIGI-KEY_PART_NUMBER"
+DRAW
+A -225 100 50 899 2700 0 0 6 N -225 50 -225 150
+P 2 0 0 6 -225 150 -50 150 N
+P 2 0 0 6 -50 150 -50 50 N
+P 2 0 0 6 -50 50 -225 50 N
+P 2 0 0 6 -50 50 -50 25 N
+P 2 0 0 6 -50 25 0 25 N
+P 2 0 0 6 0 25 0 175 N
+P 2 0 0 6 0 175 -50 175 N
+P 2 0 0 6 -50 175 -50 150 N
+P 2 0 0 6 0 -100 -125 -100 N
+P 2 0 0 6 -125 -100 -150 -50 N
+P 2 0 0 6 -150 -50 -175 -100 N
+P 2 0 0 6 0 0 0 -100 N
+P 4 0 0 6 0 -100 -20 -50 20 -50 0 -100 f
+X ~ 1 200 100 200 L 40 40 0 0 P 
+X ~ 3 200 0 200 L 40 40 0 0 P 
+X ~ 2 200 -100 200 L 40 40 0 0 P 
+ENDDRAW
+ENDDEF
+#
+# End Library
