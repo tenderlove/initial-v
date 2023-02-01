@@ -2,7 +2,7 @@ BOX_X = 81;
 BOX_Y = 101;
 BOX_Z = 95;
 MIN_WALL_THICKNESS = 2;
-SIDE_WALL_THICKNESS = 3;
+WALL = 3;
 JACK_X = 9.5;
 JACK_Y = 8;
 JACK_Z = 11;
@@ -12,7 +12,12 @@ TAB_Z = 14;
 
 POST_DIAMETER = 6;
 POST_OUTER_DIAMETER = 14;
-FRONT_POST_BASE = POST_OUTER_DIAMETER + 1;
+FRONT_TAB_Y = POST_OUTER_DIAMETER;
+FRONT_TAB_X = POST_OUTER_DIAMETER + 1;
+
+REAR_BOX_Y = TAB_LENGTH - (POST_OUTER_DIAMETER / 2);
+
+// NEGATIVE SPACE
 
 module ShifterRing() {
   translate([BOX_X / 2, BOX_Y / 2, BOX_Z])
@@ -34,9 +39,12 @@ module RearTab() {
 }
 
 module FrontLeftBump() {
+  x = 16.5;
+  y = 2;
+  z = 51;
   // Front left bar thing
-  translate([0, BOX_Y, 0])
-    cube([16.5, 2, 51]);
+  translate([0, BOX_Y - 0.1, 0])
+    cube([x, y + 0.1, z]);
 }
 
 module MainBox() {
@@ -47,7 +55,7 @@ module FrontTopJunk() {
   x = 31;
   z = 21;
   center = 22 / 2;
-  y = SIDE_WALL_THICKNESS + 3;
+  y = WALL + 3;
 
   translate([28, BOX_Y, BOX_Z - z - 8])
     cube([x, y, z]);
@@ -55,8 +63,9 @@ module FrontTopJunk() {
 
 module PowerJack() {
   x_shift = BOX_X - JACK_X - 7;
-  translate([x_shift, BOX_Y, 6])
-    cube([JACK_X, JACK_Y, JACK_Z]);
+  z_shift = 6;
+  translate([x_shift, BOX_Y - 0.1, z_shift])
+    cube([JACK_X, JACK_Y + 0.1, JACK_Z]);
 }
 
 module LeftSideBump() {
@@ -69,34 +78,9 @@ module LeftSideBump() {
   cube([x, y, z]);
 }
 
-module FrontPost(height) {
-  $fn = 80;
-  length = (POST_OUTER_DIAMETER / 2) + (16 - POST_OUTER_DIAMETER);
-  post_outer_radius = POST_OUTER_DIAMETER / 2;
-  base_difference = (FRONT_POST_BASE - POST_OUTER_DIAMETER) / 2;
-
-  difference() {
-    linear_extrude(height)
-      union() {
-        circle(d = POST_OUTER_DIAMETER);
-        translate([-(FRONT_POST_BASE / 2), -post_outer_radius])
-          polygon([ [0, 0],
-                    [FRONT_POST_BASE, 0],
-                    [POST_OUTER_DIAMETER + base_difference, post_outer_radius],
-                    [base_difference, post_outer_radius]
-                  ]);
-      }
-
-    translate([0, 0, -1])
-    linear_extrude(height + 2)
-      circle(d = POST_DIAMETER);
-  }
-
-}
-
 module FrontMounts() {
-  x = FRONT_POST_BASE;
-  y = TAB_LENGTH;
+  x = FRONT_TAB_X;
+  y = FRONT_TAB_Y;
   z = TAB_Z;
   z_shift = 63.3;
 
@@ -124,7 +108,7 @@ module RearMounts() {
 }
 
 module Shifter() {
-  MainBox();
+  #MainBox();
   FrontLeftBump();
   RearTab();
   FrontTopJunk();
@@ -133,16 +117,65 @@ module Shifter() {
   FrontMounts();
   RearMounts();
   ShifterRing();
+  RearBox();
 }
 
 module RearBox() {
   x = BOX_X - (POST_OUTER_DIAMETER * 2);
-  y = TAB_LENGTH - (POST_OUTER_DIAMETER / 2);
+  y = REAR_BOX_Y;
   z = BOX_Z;
 
   translate([(BOX_X / 2) - (x / 2), -y, 0])
-  cube([x, y, z]);
+  cube([x, y + 0.1, z]);
+}
+
+// POSITIVE SPACE
+
+module FrontPost(height) {
+  $fn = 80;
+  post_outer_radius = POST_OUTER_DIAMETER / 2;
+  base_difference = (FRONT_TAB_X - POST_OUTER_DIAMETER) / 2;
+  y_offset = FRONT_TAB_Y - POST_OUTER_DIAMETER;
+
+  translate([0, -FRONT_TAB_Y / 2, 0])
+  difference() {
+    linear_extrude(height)
+      union() {
+        translate([0, y_offset + POST_OUTER_DIAMETER / 2, 0])
+          circle(d = POST_OUTER_DIAMETER);
+
+        translate([-(FRONT_TAB_X / 2), 0, 0])
+          polygon([ [0, 0],
+                     [FRONT_TAB_X, 0],
+                     [POST_OUTER_DIAMETER + base_difference, post_outer_radius + y_offset],
+                     [base_difference, post_outer_radius + y_offset]
+                  ]);
+      }
+
+    translate([0, y_offset + (POST_OUTER_DIAMETER / 2), -1])
+    linear_extrude(height + 2)
+      circle(d = POST_DIAMETER);
+  }
+
+}
+
+
+module OuterBox() {
+  translate([-WALL, -(REAR_BOX_Y + WALL), -WALL])
+    cube([BOX_X + (WALL * 2), BOX_Y + REAR_BOX_Y + (WALL * 2), JACK_Z + 6 + WALL - 0.1]);
+}
+
+module FrontPosts(height) {
+  translate([BOX_X / 2, BOX_Y - FRONT_TAB_X, -WALL])
+  for (i = [0, 1]) {
+    mirror([i, 0, 0])
+      translate([-BOX_X / 2, 0, 0])
+      rotate([0, 0, 90])
+      translate([FRONT_TAB_X / 2, FRONT_TAB_Y / 2, 0])
+      FrontPost(height);
+  }
 }
 
 Shifter();
-RearBox();
+OuterBox();
+FrontPosts(100);
