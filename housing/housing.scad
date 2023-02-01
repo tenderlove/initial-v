@@ -1,7 +1,8 @@
 BOX_X = 81;
 BOX_Y = 101;
 BOX_Z = 95;
-MIN_WALL_THICKNESS = 2;
+TOP_WALL = 2;
+BOTTOM_WALL = 2;
 WALL = 3;
 JACK_X = 9.5;
 JACK_Y = 8;
@@ -14,15 +15,18 @@ POST_DIAMETER = 6;
 POST_OUTER_DIAMETER = 14;
 FRONT_TAB_Y = POST_OUTER_DIAMETER;
 FRONT_TAB_X = POST_OUTER_DIAMETER + 1;
+REAR_TAB_X = POST_OUTER_DIAMETER;
 
-REAR_BOX_Y = TAB_LENGTH - (POST_OUTER_DIAMETER / 2);
+REAR_TAB_Y = 16;
+
+REAR_BOX_Y = TAB_LENGTH - (POST_OUTER_DIAMETER / 2) - WALL;
 
 // NEGATIVE SPACE
 
 module ShifterRing() {
   translate([BOX_X / 2, BOX_Y / 2, BOX_Z])
   translate([-5, 6, -1])
-    linear_extrude(4)
+    linear_extrude(5)
     rotate([0, 0, -16])
     rotate([0, 180, 0])
     //import("path413.svg", center=true, dpi=94.5);
@@ -54,11 +58,10 @@ module MainBox() {
 module FrontTopJunk() {
   x = 31;
   z = 21;
-  center = 22 / 2;
   y = WALL + 3;
 
-  translate([28, BOX_Y, BOX_Z - z - 8])
-    cube([x, y, z]);
+  translate([28, BOX_Y - 0.1, BOX_Z - z - 8])
+    cube([x, y + 0.1, z]);
 }
 
 module PowerJack() {
@@ -90,7 +93,8 @@ module FrontMounts() {
         translate([(y / 2) + (BOX_X / 2), BOX_Y / 2, 0])
         rotate([0, 0, 90])
         translate([0, 0, z / 2])
-        cube([x, y, z], center=true);
+        // Adding 2 to make rendering work
+        cube([x, y + 2, z], center=true);
     }
 }
 
@@ -101,14 +105,16 @@ module RearMounts() {
 
   z_shift = 65.3;
 
+  jitter = 4; // for fixing rendering on x/z plane
+
   for(i = [0, BOX_X - x]) {
-    translate([i, -y, z_shift - z])
-      cube([x, y, z]);
+    translate([i, -(y + (jitter / 2)), z_shift - z])
+      cube([x, y + jitter, z]);
   }
 }
 
 module Shifter() {
-  #MainBox();
+  MainBox();
   FrontLeftBump();
   RearTab();
   FrontTopJunk();
@@ -160,13 +166,27 @@ module FrontPost(height) {
 }
 
 
-module OuterBox() {
-  translate([-WALL, -(REAR_BOX_Y + WALL), -WALL])
-    cube([BOX_X + (WALL * 2), BOX_Y + REAR_BOX_Y + (WALL * 2), JACK_Z + 6 + WALL - 0.1]);
+module InnerBox(height) {
+  translate([-WALL, -WALL, 0])
+  cube([BOX_X + (WALL * 2), BOX_Y + (WALL * 2), height]);
+}
+
+module RearBoxContainer(height) {
+  x = BOX_X - (POST_OUTER_DIAMETER * 2);
+  y = REAR_BOX_Y + WALL;
+  z = height;
+
+  translate([(BOX_X / 2) - (x / 2), -y, 0])
+  cube([x, y + 0.1, z]);
+}
+
+module OuterBox(height) {
+  translate([-WALL, -(REAR_BOX_Y + WALL), 0])
+    cube([BOX_X + (WALL * 2), BOX_Y + REAR_BOX_Y + (WALL * 2), height]);
 }
 
 module FrontPosts(height) {
-  translate([BOX_X / 2, BOX_Y - FRONT_TAB_X, -WALL])
+  translate([BOX_X / 2, BOX_Y - FRONT_TAB_X, 0])
   for (i = [0, 1]) {
     mirror([i, 0, 0])
       translate([-BOX_X / 2, 0, 0])
@@ -176,6 +196,50 @@ module FrontPosts(height) {
   }
 }
 
+module RearPost(height) {
+  $fn = 80;
+  diameter = POST_DIAMETER;
+
+  outer_diameter = POST_OUTER_DIAMETER;
+  outer_radius = outer_diameter / 2;
+
+  length = (outer_diameter / 2) + (REAR_TAB_Y - outer_diameter);
+
+  translate([0, (-outer_radius) + (REAR_TAB_Y / 2), 0])
+  difference() {
+    linear_extrude(height)
+      union() {
+        circle(d = outer_diameter);
+        translate([-(outer_diameter / 2), -length])
+          square([outer_diameter, length]);
+      }
+
+    translate([0, 0, -1])
+    linear_extrude(height + 2)
+      circle(d = diameter);
+  }
+}
+
+module RearPosts(height) {
+  translate([0, 0, 0])
+  for (i = [0, BOX_X - REAR_TAB_X]) {
+    translate([(REAR_TAB_X / 2) + i, -REAR_TAB_Y / 2, 0])
+      rotate([0, 0, 180])
+      RearPost(height);
+  }
+}
+
+module Container() {
+  height = BOX_Z + TOP_WALL + BOTTOM_WALL;
+  translate([0, 0, -BOTTOM_WALL]) {
+    InnerBox(height);
+    RearPosts(height);
+    RearBoxContainer(height);
+    FrontPosts(height);
+  }
+}
+
+difference() {
+Container();
 Shifter();
-OuterBox();
-FrontPosts(100);
+}
