@@ -7,7 +7,7 @@ WALL = 3;
 JACK_X = 9.5;
 JACK_Y = 8;
 JACK_Z = 11;
-JACK_FROM_RIGHT = 4.2;
+JACK_FROM_RIGHT = 6;
 TAB_LENGTH = 16;
 TAB_Z = 14;
 
@@ -16,10 +16,14 @@ POST_OUTER_DIAMETER = 14;
 FRONT_TAB_Y = POST_OUTER_DIAMETER;
 FRONT_TAB_X = POST_OUTER_DIAMETER + 1;
 REAR_TAB_X = POST_OUTER_DIAMETER;
+FRONT_TAB_Z_SHIFT = 63.3;
 
 REAR_TAB_Y = 16;
 
 REAR_BOX_Y = TAB_LENGTH - (POST_OUTER_DIAMETER / 2) - WALL;
+
+SUCTION_X = 14;
+SUCTION_Y = SUCTION_X + 2;
 
 // NEGATIVE SPACE
 
@@ -65,10 +69,19 @@ module FrontTopJunk() {
 }
 
 module PowerJack() {
-  x_shift = BOX_X - JACK_X - 7;
+  x_shift = BOX_X - JACK_X - JACK_FROM_RIGHT;
   z_shift = 6;
   translate([x_shift, BOX_Y - 0.1, z_shift])
     cube([JACK_X, JACK_Y + 0.1, JACK_Z]);
+}
+
+module ProgAccess() {
+  x = 11;
+  y = 3;
+  z = BOTTOM_WALL + 2;
+  y_shift = BOX_Y - (FRONT_TAB_X / 2);
+  translate([BOX_X - x - JACK_X - JACK_FROM_RIGHT, y_shift, -z + 1])
+    cube([x, y, z]);
 }
 
 module LeftSideBump() {
@@ -85,7 +98,7 @@ module FrontMounts() {
   x = FRONT_TAB_X;
   y = FRONT_TAB_Y;
   z = TAB_Z;
-  z_shift = 63.3;
+  z_shift = FRONT_TAB_Z_SHIFT;
 
   translate([BOX_X / 2, (BOX_Y / 2) - (x / 2), z_shift - z])
     for (i = [0, 1]) {
@@ -124,6 +137,7 @@ module Shifter() {
   RearMounts();
   ShifterRing();
   RearBox();
+  ProgAccess();
 }
 
 module RearBox() {
@@ -164,7 +178,6 @@ module FrontPost(height) {
   }
 
 }
-
 
 module InnerBox(height) {
   translate([-WALL, -WALL, 0])
@@ -221,7 +234,6 @@ module RearPost(height) {
 }
 
 module RearPosts(height) {
-  translate([0, 0, 0])
   for (i = [0, BOX_X - REAR_TAB_X]) {
     translate([(REAR_TAB_X / 2) + i, -REAR_TAB_Y / 2, 0])
       rotate([0, 0, 180])
@@ -236,10 +248,100 @@ module Container() {
     RearPosts(height);
     RearBoxContainer(height);
     FrontPosts(height);
+    SuctionMounts();
   }
 }
 
-difference() {
-Container();
-Shifter();
+module PCBMount() {
+  mount_width = 3.5;
+  mount_height = 11;
+  pcb_thickness = 1.8;
+  wall = 2;
+
+  translate([BOX_X, BOX_Y - (FRONT_TAB_X / 2), 0])
+  translate([-mount_width, -((wall * 2) + pcb_thickness) / 2, 0]) {
+    translate([0, pcb_thickness + wall, 0])
+      cube([mount_width, wall, mount_height]);
+    cube([mount_width, wall, mount_height]);
+  }
 }
+
+module SuctionMount() {
+  nut_depth = 4;
+  suction_z = nut_depth + BOTTOM_WALL;
+
+  top_shift = (SUCTION_X / 2) + (SUCTION_Y - SUCTION_X);
+
+  translate([0, -top_shift + (SUCTION_Y / 2), 0])
+
+  difference() {
+    post_outer_radius = SUCTION_X / 2;
+    union() {
+      cylinder(suction_z, d=SUCTION_X, $fn=80);
+      translate([-post_outer_radius, 0, 0])
+        cube([SUCTION_X, top_shift, suction_z]);
+    }
+    translate([0, 0, suction_z - nut_depth])
+      cylinder(nut_depth + 0.5, d=9.3, $fn=6);
+    translate([0, 0, -0.5])
+      cylinder(suction_z + 2, d=5.3, $fn=80);
+  }
+}
+
+module SuctionMounts() {
+  translate([BOX_X / 2, BOX_Y / 2, 0]) {
+    translate([0, -REAR_BOX_Y / 2, 0])
+      for (i = [0, 1]) {
+        mirror([0, i, 0])
+          translate([0, -(BOX_Y + REAR_BOX_Y) / 2, 0])
+          translate([0, -SUCTION_Y / 2, 0])
+          SuctionMount();
+      }
+
+    for (i = [0, 1]) {
+      mirror([i, 0, 0])
+        translate([(BOX_X / 2) + (SUCTION_Y / 2), 0, 0])
+        rotate([0, 0, 90])
+        SuctionMount();
+    }
+  }
+}
+
+module FullContainer() {
+  difference() {
+    Container();
+    Shifter();
+  }
+  PCBMount();
+}
+
+module Mask() {
+  mask_x = BOX_X + (FRONT_TAB_Y * 2) + 4;
+  mask_y = BOX_Y + (REAR_TAB_X + (WALL * 2)) + 4;
+  mask_z = BOX_Z + TOP_WALL + BOTTOM_WALL + 4;
+  translate([-FRONT_TAB_Y - 2, -REAR_TAB_X - WALL - 2, -BOTTOM_WALL - 2])
+    cube([mask_x, mask_y, mask_z]);
+}
+
+module BottomMask() {
+  translate([-FRONT_TAB_Y - 2, -REAR_TAB_X - WALL - 2, -BOTTOM_WALL - 2])
+    cube([mask_x, mask_y, mask_z]);
+}
+
+module TopPart() {
+  difference() {
+    FullContainer();
+    BottomMask();
+  }
+}
+
+module BottomTray() {
+  difference() {
+    FullContainer();
+    translate([0, 0, JACK_Z + 6 + BOTTOM_WALL + 1.9])
+    Mask();
+  }
+}
+
+FullContainer();
+//BottomTray();
