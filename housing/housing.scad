@@ -48,7 +48,7 @@ module RearTab() {
 
 module FrontLeftBump() {
   x = 16.5;
-  y = 2;
+  y = 1.5;
   z = 51;
   // Front left bar thing
   translate([0, BOX_Y - 0.1, 0])
@@ -70,7 +70,7 @@ module FrontTopJunk() {
 
 module PowerJack() {
   x_shift = BOX_X - JACK_X - JACK_FROM_RIGHT;
-  z_shift = 6;
+  z_shift = 8;
   translate([x_shift, BOX_Y - 0.1, z_shift])
     cube([JACK_X, JACK_Y + 0.1, JACK_Z]);
 }
@@ -253,8 +253,8 @@ module Container() {
 }
 
 module PCBMount() {
-  mount_width = 3.5;
-  mount_height = 11;
+  mount_width = 5.5;
+  mount_height = 13;
   pcb_thickness = 1.8;
   wall = 2;
 
@@ -317,19 +317,27 @@ module FullContainer() {
 
 module Mask() {
   mask_x = BOX_X + (FRONT_TAB_Y * 2) + 4;
-  mask_y = BOX_Y + (REAR_TAB_X + (WALL * 2)) + 4;
-  mask_z = BOX_Z + TOP_WALL + BOTTOM_WALL + 4;
-  translate([-FRONT_TAB_Y - 2, -REAR_TAB_X - WALL - 2, -BOTTOM_WALL - 2])
+  mask_y = BOX_Y + REAR_BOX_Y + (SUCTION_Y * 2) + 4;
+  mask_z = BOX_Z + TOP_WALL + BOTTOM_WALL;
+  translate([-FRONT_TAB_Y - 2, -(REAR_BOX_Y + SUCTION_Y + 2), -BOTTOM_WALL])
     cube([mask_x, mask_y, mask_z]);
 }
 
 module BottomMask() {
-  translate([-FRONT_TAB_Y - 2, -REAR_TAB_X - WALL - 2, -BOTTOM_WALL - 2])
-    cube([mask_x, mask_y, mask_z]);
+  mask_z = BOX_Z + TOP_WALL + BOTTOM_WALL;
+  translate([0, 0, FRONT_TAB_Z_SHIFT + BOTTOM_WALL - mask_z])
+  Mask();
 }
 
 module TopPart() {
   difference() {
+    FullContainer();
+    BottomMask();
+  }
+}
+
+module BottomPart() {
+  intersection() {
     FullContainer();
     BottomMask();
   }
@@ -342,6 +350,9 @@ module BottomTray() {
     Mask();
   }
 }
+//BottomPart();
+//BottomTray();
 
-FullContainer();
+FrontMounts();
+//FullContainer();
 //BottomTray();
