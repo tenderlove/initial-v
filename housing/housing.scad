@@ -26,7 +26,7 @@ REAR_SIDE_TO_SIDE = 79;
 
 REAR_BOX_Y = TAB_LENGTH - (POST_OUTER_DIAMETER / 2) - WALL;
 REAR_BOX_X = REAR_SIDE_TO_SIDE - (REAR_TAB_X * 2);
-echo(REAR_BOX_X);
+assert(REAR_BOX_X == 50);
 
 REAR_TAB_LOOP_Z = 7;
 REAR_TAB_LOOP_TOP = 43;
@@ -58,9 +58,9 @@ module RearTabLoop() {
 }
 
 module FrontLeftBump() {
-  x = 16.5;
+  x = 17.5;
   y = 1.5;
-  z = 51;
+  z = 55;
   // Front left bar thing
   translate([0, BOX_Y - 0.1, 0])
     cube([x, y + 0.1, z]);
@@ -204,9 +204,11 @@ module FrontPost(height, positive) {
           ]);
       }
     } else {
-      translate([0, y_offset + (POST_OUTER_DIAMETER / 2), -1])
+      translate([0, y_offset + (POST_OUTER_DIAMETER / 2), -1]) {
         linear_extrude(height + 2)
-        circle(d = POST_DIAMETER);
+          circle(d = POST_DIAMETER);
+        CounterSink(9.3, 4 + 1, POST_DIAMETER);
+      }
     }
 }
 
@@ -245,6 +247,28 @@ module FrontPosts(height, positive) {
   }
 }
 
+LAYER_HEIGHT = 0.2;
+
+module CounterSink(countersink_d, countersink_z, bolt_d, facets = 6, floating = true) {
+  cylinder(countersink_z, d=countersink_d, $fn=facets);
+
+  if (floating) {
+    // First bridge
+    translate([0, 0, countersink_z + (LAYER_HEIGHT / 2)])
+      intersection() {
+        translate([0, 0, -(LAYER_HEIGHT / 2)])
+          cylinder(LAYER_HEIGHT, d=countersink_d, $fn=facets);
+        color("green")
+          cube([bolt_d, countersink_d, LAYER_HEIGHT], center=true);
+      }
+
+    color("blue")
+    // Second bridge
+    translate([0, 0, countersink_z + (LAYER_HEIGHT / 2) + LAYER_HEIGHT])
+      cube([bolt_d, bolt_d, LAYER_HEIGHT], center=true);
+  }
+}
+
 module RearPost(height) {
   $fn = 80;
   diameter = POST_DIAMETER;
@@ -266,6 +290,9 @@ module RearPost(height) {
     translate([0, 0, -1])
     linear_extrude(height + 2)
       circle(d = diameter);
+
+    translate([0, 0, -0.5])
+      CounterSink(9.3, 4 + 0.5, diameter);
   }
 }
 
@@ -443,9 +470,3 @@ if (rendering == "middle") {
 if (rendering == "full") {
   FullContainer();
 }
-//BottomPart();
-//BottomTray();
-
-//FrontMounts();
-//FullContainer();
-//BottomTray();
