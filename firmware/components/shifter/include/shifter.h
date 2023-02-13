@@ -26,6 +26,16 @@ typedef enum {
     SHIFTER_SIDE_UP,
     SHIFTER_SIDE_DOWN,
     SHIFTER_SIDE,
+
+    SHIFTER_CENTER_PARK,
+    SHIFTER_UP_PARK,
+    SHIFTER_UP_UP_PARK,
+    SHIFTER_DOWN_PARK,
+    SHIFTER_DOWN_DOWN_PARK,
+    SHIFTER_SIDE_UP_PARK,
+    SHIFTER_SIDE_DOWN_PARK,
+    SHIFTER_SIDE_PARK,
+
     SHIFTER_MAX,
 } handle_position_t;
 
@@ -54,7 +64,7 @@ SHIFTER_POSITION(twai_message_t message, handle_position_t * pos)
     uint8_t position = (message.data[2] >> 4) & 0xF;
 
     // Resetting causes the position to go to 9
-    if (position > SHIFTER_MAX) {
+    if (position > 8) {
       position = SHIFTER_CENTER;
     }
 
