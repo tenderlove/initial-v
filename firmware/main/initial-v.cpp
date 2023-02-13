@@ -41,7 +41,7 @@ class HIDDataCallbacks : public NimBLECharacteristicCallbacks
     public:
         HIDDataCallbacks(void) { }
 
-        void onWrite(NimBLECharacteristic* me) {
+        void onWrite(NimBLECharacteristic* me, NimBLEConnInfo& connInfo) {
             size_t len = me->getDataLength();
             const uint8_t *buff = me->getValue()->data();
             handle_state_t tx_action;
