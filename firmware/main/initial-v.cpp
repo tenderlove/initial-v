@@ -32,6 +32,8 @@ typedef enum {
 
 handle_state_t handle_mode = NONE;
 handle_position_t current_pos = SHIFTER_CENTER;
+uint16_t command_pos = 0;
+
 uint8_t brightness = 0xFF;
 
 class HIDDataCallbacks : public NimBLECharacteristicCallbacks
@@ -107,52 +109,77 @@ receive_task(void *arg)
         }
 
         //Process received message
-        handle_position_t pos;
+        handle_position_t pos = SHIFTER_CENTER;
         if (SHIFTER_POSITION(message, &pos)) {
             if (current_pos != pos) {
                 handle_position_t to_pos = (handle_position_t)((uint8_t)pos & SHIFTER_POSITION_MASK);
                 handle_position_t from_pos = (handle_position_t)((uint8_t)current_pos & SHIFTER_POSITION_MASK);
 
-                if (to_pos != from_pos) {
-                    uint8_t button = to_pos;
-                    printf("from pos (%d) %d -> to pos %d\n", pos, from_pos, to_pos);
-
-                    // Center -> side
-                    if (to_pos == SHIFTER_SIDE && from_pos == SHIFTER_CENTER) {
-                        uint8_t press = button | PRESSED;
-                        xQueueSend(buttons_queue, &press, portMAX_DELAY);
-                        vTaskDelay(pdMS_TO_TICKS(3));
-                        xQueueSend(buttons_queue, &button, portMAX_DELAY);
-                    }
-                    else {
-                        // Side -> center
-                        if (to_pos == SHIFTER_CENTER && from_pos == SHIFTER_SIDE) {
-                            uint8_t press = button | PRESSED;
-                            xQueueSend(buttons_queue, &press, portMAX_DELAY);
-                            vTaskDelay(pdMS_TO_TICKS(3));
-                            xQueueSend(buttons_queue, &button, portMAX_DELAY);
+                switch(to_pos) {
+                    case SHIFTER_CENTER:
+                        // Side -> Center, record it
+                        if (from_pos == SHIFTER_SIDE) {
+                            // Center is 0, so we need to specifically do this
+                            command_pos = to_pos;
+                            xQueueSend(buttons_queue, &command_pos, portMAX_DELAY);
+                            break;
                         }
-                        else {
-                            // Center -> something else == button press
-                            if (from_pos == SHIFTER_CENTER) {
-                                button |= PRESSED;
-                            }
 
-                            // something else -> center == release previous button
-                            if (to_pos == SHIFTER_CENTER) {
-                                button = current_pos;
-                            }
-                            xQueueSend(buttons_queue, &button, portMAX_DELAY);
+                        if (command_pos) {
+                            printf("Send the key for pos %d\n", command_pos);
+                            xQueueSend(buttons_queue, &command_pos, portMAX_DELAY);
+                            command_pos = 0;
                         }
-                    }
-                }
-                else {
-                    if (pos & PARK_BUTTON_BIT) {
-                        printf("park button pressed\n");
-                    }
-                    else {
-                        printf("park button released\n");
-                    }
+                        if (pos != to_pos) { // Pressed park
+                            printf("Park pressed\n");
+                            command_pos = pos;
+                        }
+                        break;
+                    case SHIFTER_UP:
+                        // Center -> Up, record it
+                        if (from_pos == SHIFTER_CENTER) {
+                            command_pos = to_pos;
+                        }
+                        // UpUp -> Up, ignore
+                        break;
+                    case SHIFTER_UP_UP:
+                        command_pos = to_pos;
+                        break;
+                    case SHIFTER_DOWN:
+                        // Center -> Down, record it
+                        if (from_pos == SHIFTER_CENTER) {
+                            command_pos = to_pos;
+                        }
+                        // DownDown -> Down, ignore
+                        break;
+                    case SHIFTER_DOWN_DOWN:
+                        command_pos = to_pos;
+                        break;
+                    case SHIFTER_SIDE:
+                        // Center -> Side, record it
+                        if (from_pos == SHIFTER_CENTER) {
+                            command_pos = to_pos;
+                        }
+
+                        if (command_pos) {
+                            xQueueSend(buttons_queue, &command_pos, portMAX_DELAY);
+                            command_pos = 0;
+                        }
+                        if (pos != to_pos) { // Pressed park
+                            printf("Side Park pressed\n");
+                            command_pos = pos;
+                        }
+                        break;
+                    case SHIFTER_SIDE_UP:
+                        command_pos = to_pos;
+                        break;
+                    case SHIFTER_SIDE_DOWN:
+                        command_pos = to_pos;
+                        break;
+                    case SHIFTER_MAX:
+                        break;
+                    default:
+                        break;
                 }
             }
 
@@ -161,44 +188,145 @@ receive_task(void *arg)
     }
 }
 
-uint8_t key_lut[] = {
-    'r', // CENTER
-    'u', // UP
-    'U', // UP_UP
-    'd', // DOWN
-    'D', // DOWN_DOWN
-    'x', // SIDE_UP
-    'y', // SIDE_DOWN
-    'l', // SIDE
+typedef void selection_handler_t(handle_position_t, handle_position_t);
+
+// DRIVE means the user was in NORMAL mode.
+static void
+vim_drive_mode(handle_position_t from, handle_position_t to)
+{
+    handle_position_t no_park = (handle_position_t)(to & SHIFTER_POSITION_MASK);
+
+    // Save the file
+    if (to == SHIFTER_CENTER_PARK) {
+        kb->press(':');
+        kb->release(':');
+        kb->press('w');
+        kb->release('w');
+        kb->press(KEY_RETURN);
+        kb->release(KEY_RETURN);
+        return;
+    }
+
+    switch(no_park) {
+        case SHIFTER_CENTER:
+            kb->press(KEY_ESC);
+            kb->release(KEY_ESC);
+            break;
+        case SHIFTER_UP_UP:
+            kb->press('i');
+            kb->release('i');
+            break;
+        case SHIFTER_DOWN_DOWN:
+            kb->press('o');
+            kb->release('o');
+            break;
+        case SHIFTER_SIDE:
+            kb->press(KEY_LEFT_CTRL);
+            kb->press('v');
+            kb->releaseAll();
+            break;
+        case SHIFTER_SIDE_UP:
+        case SHIFTER_UP:
+            kb->press(KEY_UP_ARROW);
+            kb->release(KEY_UP_ARROW);
+            break;
+        case SHIFTER_SIDE_DOWN:
+        case SHIFTER_DOWN:
+            kb->press(KEY_DOWN_ARROW);
+            kb->release(KEY_DOWN_ARROW);
+            break;
+        default:
+            break;
+    }
+}
+
+// NEUTRAL means the user was in INSERT mode.
+static void
+vim_neutral_mode(handle_position_t from, handle_position_t to)
+{
+    handle_position_t no_park = (handle_position_t)(to & SHIFTER_POSITION_MASK);
+
+    // If they hit park while in drive mode, hit the ESC button
+    if (to & PARK_BUTTON_BIT) {
+        kb->press(KEY_ESC);
+        kb->release(KEY_ESC);
+    }
+
+    switch(no_park) {
+        case SHIFTER_UP_UP:
+            kb->press(KEY_PAGE_UP);
+            kb->release(KEY_PAGE_UP);
+            break;
+        case SHIFTER_DOWN_DOWN:
+            kb->press(KEY_PAGE_DOWN);
+            kb->release(KEY_PAGE_DOWN);
+            break;
+        case SHIFTER_UP:
+            kb->press(KEY_UP_ARROW);
+            kb->release(KEY_UP_ARROW);
+            break;
+        case SHIFTER_DOWN:
+            kb->press(KEY_DOWN_ARROW);
+            kb->release(KEY_DOWN_ARROW);
+            break;
+        default:
+            break;
+    }
+}
+
+static void
+vim_reverse_mode(handle_position_t from, handle_position_t to)
+{
+}
+
+static void
+vim_park_mode(handle_position_t from, handle_position_t to)
+{
+    // Save the file
+    if (to == SHIFTER_CENTER_PARK) {
+        kb->press(':');
+        kb->release(':');
+        kb->press('q');
+        kb->release('q');
+        kb->press(KEY_RETURN);
+        kb->release(KEY_RETURN);
+        return;
+    }
+
+    vim_drive_mode(from, to);
+}
+
+selection_handler_t * vim_lut[(PARK - DRIVE) + 1] = {
+    vim_drive_mode,    // NORMAL mode
+    vim_neutral_mode,  // INSERT mode
+    vim_reverse_mode,  // ??? mode
+    vim_park_mode,     // NORMAL mode, but buffer is saved
 };
 
 void
 kb_transmit_task(void *arg)
 {
     while (1) {
-        uint8_t pressed;
-        uint8_t button;
+        uint16_t pressed;
         xQueueReceive(buttons_queue, &pressed, portMAX_DELAY);
 
-        button = pressed & BUTTON_MASK;
-
-        uint8_t key = key_lut[button];
-
         if (kb->isConnected()) {
-            switch (key) {
-                case SHIFTER_CENTER:
-                case SHIFTER_SIDE:
-                    break;
-            }
-            if (pressed & PRESSED) {
-                printf("pressed! ");
-                //kb->press(key);
+            selection_handler_t * cb = vim_lut[handle_mode - DRIVE];
+            if (cb) {
+                printf("found handler\n");
+                handle_position_t from;
+                handle_position_t to;
+
+                from = (handle_position_t)(pressed >> 8);
+                to = (handle_position_t)(pressed & 0xFF);
+                cb(from, to);
             }
             else {
-                printf("released! ");
-                //kb->release(key);
+                printf("No handler for handle state %d\n", handle_mode);
             }
-            printf("%d key: %c\n", button, (char)key);
+        }
+        else {
+            printf("KB Not connected\n");
         }
     }
 }
