@@ -25,6 +25,8 @@ typedef enum {
     NEUTRAL,
     REVERSE,
     PARK,
+    VIM,
+    GENERAL,
 } handle_state_t;
 
 #define PRESSED (1 << 7)
@@ -33,6 +35,7 @@ typedef enum {
 handle_state_t handle_mode = NONE;
 handle_position_t current_pos = SHIFTER_CENTER;
 uint16_t command_pos = 0;
+uint8_t mode = VIM;
 
 uint8_t brightness = 0xFF;
 
@@ -68,6 +71,13 @@ class HIDDataCallbacks : public NimBLECharacteristicCallbacks
                 case REVERSE:
                 case PARK:
                     handle_mode = requested_state;
+                    break;
+                case VIM:
+                    mode = VIM;
+                    break;
+                case GENERAL:
+                    mode = GENERAL;
+                    handle_mode = DRIVE;
                     break;
             }
 
@@ -296,11 +306,88 @@ vim_park_mode(handle_position_t from, handle_position_t to)
     vim_drive_mode(from, to);
 }
 
+static void
+general_drive_mode(handle_position_t from, handle_position_t to)
+{
+    // Lock the screen
+    if (to == SHIFTER_CENTER_PARK) {
+        kb->press(KEY_LEFT_CTRL);
+        kb->press(KEY_LEFT_GUI);
+        kb->press('q');
+        kb->releaseAll();
+        return;
+    }
+
+    handle_position_t no_park = (handle_position_t)(to & SHIFTER_POSITION_MASK);
+    switch(no_park) {
+        case SHIFTER_CENTER:
+            kb->releaseAll();
+            break;
+        case SHIFTER_SIDE:
+            kb->press(KEY_LEFT_GUI);
+            break;
+        case SHIFTER_UP_UP:
+            kb->press(KEY_LEFT_GUI);
+            kb->press(KEY_LEFT_SHIFT);
+            kb->press(']');
+            kb->releaseAll();
+            break;
+        case SHIFTER_DOWN_DOWN:
+            kb->press(KEY_LEFT_GUI);
+            kb->press(KEY_LEFT_SHIFT);
+            kb->press('[');
+            kb->releaseAll();
+            break;
+        case SHIFTER_UP:
+            kb->press(KEY_PAGE_UP);
+            kb->release(KEY_PAGE_UP);
+            break;
+        case SHIFTER_DOWN:
+            kb->press(KEY_PAGE_DOWN);
+            kb->release(KEY_PAGE_DOWN);
+            break;
+        case SHIFTER_SIDE_UP:
+            kb->press(KEY_TAB);
+            kb->release(KEY_TAB);
+            break;
+        case SHIFTER_SIDE_DOWN:
+            kb->press(KEY_LEFT_SHIFT);
+            kb->press(KEY_TAB);
+            kb->release(KEY_TAB);
+            kb->release(KEY_LEFT_SHIFT);
+            break;
+        default:
+            break;
+    }
+}
+
+static void
+general_neutral_mode(handle_position_t from, handle_position_t to)
+{
+}
+
+static void
+general_reverse_mode(handle_position_t from, handle_position_t to)
+{
+}
+
+static void
+general_park_mode(handle_position_t from, handle_position_t to)
+{
+}
+
 selection_handler_t * vim_lut[(PARK - DRIVE) + 1] = {
     vim_drive_mode,    // NORMAL mode
     vim_neutral_mode,  // INSERT mode
     vim_reverse_mode,  // ??? mode
     vim_park_mode,     // NORMAL mode, but buffer is saved
+};
+
+selection_handler_t * general_lut[(PARK - DRIVE) + 1] = {
+    general_drive_mode,
+    general_neutral_mode,
+    general_reverse_mode,
+    general_park_mode,
 };
 
 void
@@ -311,7 +398,14 @@ kb_transmit_task(void *arg)
         xQueueReceive(buttons_queue, &pressed, portMAX_DELAY);
 
         if (kb->isConnected()) {
-            selection_handler_t * cb = vim_lut[handle_mode - DRIVE];
+            selection_handler_t * cb;
+            if (mode == VIM) {
+                cb = vim_lut[handle_mode - DRIVE];
+            }
+            else {
+                cb = general_lut[handle_mode - DRIVE];
+            }
+
             if (cb) {
                 printf("found handler\n");
                 handle_position_t from;
@@ -361,6 +455,10 @@ transmit_task(void *arg)
                 shifter_send_park();
                 break;
             case NONE:
+                break;
+            case VIM:
+            case GENERAL:
+                printf("shouldn't happen\n");
                 break;
         }
     }
