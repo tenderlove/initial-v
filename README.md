@@ -23,8 +23,8 @@ The table below describes the key presses for each handle position according to 
 
 |             |  Park  |  Up  | Down | Double Up | Double Down | Move Left | Left Up | Left Down | Move Right (back to center) |
 |-------      |--------|------|------|-----------|-------------|-----------|---------|-----------|------------|
-| Normal Mode | `:w` on a modified buffer, `:wq` on unmodified buffer | Up key | Down key | `i` | `o` | `CTRL-V` | Up Key | Down key | `ESC` |
-| Insert Mode | `ESC` | Up key | Down key | Page Up | Page Down|           |         |           |            |
+| Normal Mode (Drive) | `:w` on a modified buffer, `:wq` on unmodified buffer | Up key | Down key | `i` | `o` | `CTRL-V` | Up Key | Down key | `ESC` |
+| Insert Mode (Neutral) | `ESC` | Up key | Down key | Page Up | Page Down|           |         |           |            |
 
 "Drive" on the handle means "Normal Mode" in Vim.  "Neutral" on the handle means "Insert Mode" in Vim.
 It's not possible to move the handle to the left when the handle is in Neutral mode, so there are no key combinations.
