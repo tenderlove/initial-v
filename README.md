@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="artwork/logo.png">
+  <img src="images/logo.png">
 </p>
 
 # Initial V
@@ -10,6 +10,8 @@ In this repository, you'll find [schematics and PCB designs](pcb), [stl files](h
 shifter in to a Bluetooth keyboard that can control Vim.
 
 Think of this project as a very over-engineered [Vim clutch](https://github.com/alevchuk/vim-clutch).
+
+![Handle Front View](images/P3010002.jpeg) ![Handle Side View](images/P3010003.jpeg)
 
 ## What does it do?
 
