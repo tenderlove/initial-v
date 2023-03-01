@@ -2,6 +2,10 @@
   <img src="images/logo.png">
 </p>
 
+<p align="center">
+  <img alt="Handle Front View" src="images/P3010002.jpeg" width=200 /> <img alt="Handle Side View" src="images/P3010003.jpeg" width=200 />
+</p>
+
 # Initial V
 
 Initial V is a BMW shifter that has been converted to a Bluetooth keyboard.
@@ -10,10 +14,6 @@ In this repository, you'll find [schematics and PCB designs](pcb), [stl files](h
 shifter in to a Bluetooth keyboard that can control Vim.
 
 Think of this project as a very over-engineered [Vim clutch](https://github.com/alevchuk/vim-clutch).
-
-<p align="center">
-  <img alt="Handle Front View" src="images/P3010002.jpeg" width=200 /> <img alt="Handle Side View" src="images/P3010003.jpeg" width=200 />
-</p>
 
 ## What does it do?
 
