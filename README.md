@@ -11,8 +11,7 @@ shifter in to a Bluetooth keyboard that can control Vim.
 
 Think of this project as a very over-engineered [Vim clutch](https://github.com/alevchuk/vim-clutch).
 
-<img alt="Handle Front View" src="images/P3010002.jpeg" width=100 />
-<img alt="Handle Side View" src="images/P3010003.jpeg" width=100 />
+<img alt="Handle Front View" src="images/P3010002.jpeg" width=100 /> <img alt="Handle Side View" src="images/P3010003.jpeg" width=100 />
 
 ## What does it do?
 
