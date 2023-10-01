@@ -97,7 +97,3 @@ pub fn main() anyerror!void {
         std.log.info("couldn't find device", .{});
     }
 }
-
-test "basic test" {
-    try std.testing.expectEqual(10, 3 + 7);
-}
